@@ -10,6 +10,7 @@
   - [format the get to display it in json](#format-the-get-to-display-it-in-json)
 - [Get Secret by API](#get-secret-by-api)
 - [Create Secret by API](#create-secret-by-api)
+- [Delete Secret by API](#delete-secret-by-api)
 
 
 ## Installation
@@ -111,3 +112,8 @@ I created the payload.json for this
 This is the command to put the secret:
 
 curl -H 'Authorization:Bearer TOKEN' -X POST http://vault.local.at:8200/v1/bst/kv2/data/secret --data @payload.json | jq
+
+
+## Delete Secret by API
+
+curl -H 'Authorization:Bearer TOKEN' -X DELETE http://vault.local.at:8200/v1/bst/kv2/data/secret | jq
