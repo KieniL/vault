@@ -1,2 +1,4 @@
 *.csr
 *.cert.pem
+tmp
+*.pem

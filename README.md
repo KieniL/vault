@@ -1,5 +1,6 @@
 # command repo for vault <!-- omit in toc -->
 - [Installation](#installation)
+- [Further documentation](#further-documentation)
 - [enable a a secret type](#enable-a-a-secret-type)
 - [disable a a secret type](#disable-a-a-secret-type)
 - [input a secret](#input-a-secret)
@@ -17,11 +18,23 @@
     - [Then another secret path is enabled:](#then-another-secret-path-is-enabled)
     - [Then a csr is created:](#then-a-csr-is-created)
     - [Then you can sign the csr to create the cert:](#then-you-can-sign-the-csr-to-create-the-cert)
-  - [sign the certificate back to vault](#sign-the-certificate-back-to-vault)
+    - [sign the certificate back to vault](#sign-the-certificate-back-to-vault)
+    - [create a role to generate certificates](#create-a-role-to-generate-certificates)
+    - [generate the certificates](#generate-the-certificates)
+    - [create a role for cert authentication](#create-a-role-for-cert-authentication)
+    - [generate the policy](#generate-the-policy)
+    - [write the certificates](#write-the-certificates)
+    - [enable authentication with cert](#enable-authentication-with-cert)
+    - [write the certificate to auth](#write-the-certificate-to-auth)
+    - [login (not tested since I don't use tls due to local machine)](#login-not-tested-since-i-dont-use-tls-due-to-local-machine)
+    - [test secrets (not tested since I don't use tls due to local machine)](#test-secrets-not-tested-since-i-dont-use-tls-due-to-local-machine)
 
 
 ## Installation
 The installation was done with: https://github.com/KieniL/software_installer
+
+## Further documentation
+The steps were taken from https://github.com/b1tsized/vault-tutorial and the corresponding youtube playlist
 
 
 
@@ -149,10 +162,54 @@ common_name="local.at Intermediate Authority" \
 |jq -r '.data.csr' > pki_intermediate.csr</code>
 
 #### Then you can sign the csr to create the cert:
-vault write -format=json pki/root/sign-intermediate \
+<code>vault write -format=json pki/root/sign-intermediate \
  csr=@pki_intermediate.csr \
  format=pem_bundle ttl="43800h" \
- | jq -r '.data.certificate' > intermediate.cert.pem
+ | jq -r '.data.certificate' > intermediate.cert.pem</code>
 
-### sign the certificate back to vault
+#### sign the certificate back to vault
 vault write pki_int/intermediate/set-signed certificate=@intermediate.cert.pem
+
+#### create a role to generate certificates
+<code>vault write pki_int/roles/vault-local \
+ allowed_domains="local.at" \
+ allow_subdomains=true \
+ max_ttl="720h"</code>
+
+#### generate the certificates
+vault write pki_int/issue/vault-local common_name="vault.local.at"
+
+write the different certificates to different files
+
+vault_ca_chain.pem --> key is ca_chain
+vault_ca.pem --> key is certificate
+vault_issuing_ca.pem --> key is issuing_ca
+vault_privkey.pem --> key is private_key
+
+#### create a role for cert authentication
+vault write pki_int/roles/vault-cert allow_any_name=true max_ttl="720h" generate_lease=true
+
+#### generate the policy
+use the vault-cert.hcl for it
+
+then:
+vault policy write vault-cert vault-cert.hcl
+
+#### write the certificates
+vault write -format=json pki_int/issue/vault-cert common_name="vault-cert" | tee >(jq -r .data.certificate > vault_ca.pem) >(jq -r .data.issuing_ca > vault_issuing_ca.pem) >(jq -r .data.private_key > vault_privkey.pem)
+
+
+#### enable authentication with cert
+vault auth enable cert
+
+#### write the certificate to auth
+vault write auth/cert/certs/vault-cert display_name=vault_ca.pem policies=vault-cert certificate=@vault_ca.pem
+
+#### login (not tested since I don't use tls due to local machine)
+vault login -method=cert -client-cert=vault_ca.pem -client-key=vault_privkey.pem name=vault-cert
+
+
+#### test secrets (not tested since I don't use tls due to local machine)
+vault kv get -format=json bstv2/data/secret/ | jq
+vault kv get -format=json bstv1/secret/ | jq
+vault kv get -format=json outside_cert/secret/ | jq
