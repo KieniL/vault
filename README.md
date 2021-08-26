@@ -11,6 +11,13 @@
 - [Get Secret by API](#get-secret-by-api)
 - [Create Secret by API](#create-secret-by-api)
 - [Delete Secret by API](#delete-secret-by-api)
+- [enable pki](#enable-pki)
+- [tune a secret](#tune-a-secret)
+- [write rootcertificate](#write-rootcertificate)
+    - [Then another secret path is enabled:](#then-another-secret-path-is-enabled)
+    - [Then a csr is created:](#then-a-csr-is-created)
+    - [Then you can sign the csr to create the cert:](#then-you-can-sign-the-csr-to-create-the-cert)
+  - [sign the certificate back to vault](#sign-the-certificate-back-to-vault)
 
 
 ## Installation
@@ -117,3 +124,35 @@ curl -H 'Authorization:Bearer TOKEN' -X POST http://vault.local.at:8200/v1/bst/k
 ## Delete Secret by API
 
 curl -H 'Authorization:Bearer TOKEN' -X DELETE http://vault.local.at:8200/v1/bst/kv2/data/secret | jq
+
+
+## enable pki
+vaut secrets enable pki
+
+## tune a secret
+Tune a secret for example setting a max-lease time to live
+
+vault secrets tune --max-lease-ttl=87600h pki
+
+## write rootcertificate
+<code>vault write -field=certificate pki/root/generate/internal \
+issuing_certificates="http://vault.local.at:8200/v1/pki/crl" \
+crl_distribution_points=\http://vault.local.at:8200/v1/pki/crl</code>
+
+
+#### Then another secret path is enabled:
+vault secrets enable -path=pki_int pki
+
+#### Then a csr is created:
+<code>vault write -format=json pki_int/intermediate/generate/internal \
+common_name="local.at Intermediate Authority" \
+|jq -r '.data.csr' > pki_intermediate.csr</code>
+
+#### Then you can sign the csr to create the cert:
+vault write -format=json pki/root/sign-intermediate \
+ csr=@pki_intermediate.csr \
+ format=pem_bundle ttl="43800h" \
+ | jq -r '.data.certificate' > intermediate.cert.pem
+
+### sign the certificate back to vault
+vault write pki_int/intermediate/set-signed certificate=@intermediate.cert.pem
