@@ -9,6 +9,7 @@
 - [get a secret](#get-a-secret)
   - [format the get to display it in json](#format-the-get-to-display-it-in-json)
 - [Get Secret by API](#get-secret-by-api)
+- [Create Secret by API](#create-secret-by-api)
 
 
 ## Installation
@@ -91,6 +92,9 @@ curl -H 'X-Vault-Token: TOKEN' -X GET VAULT_URL:VAULT_PORT/v1/SECRETPATH/SECRETN
 
 curl -H 'X-Vault-Token: TOKEN' -X GET http://vault.local.at:8200/v1/bst/kv1/secret
 
+
+You can also use Authorization:Bearer TOKEN instead of X-VAULT_TOKEN: TOKEN
+
 ---
 **WARNING**
 This can only be done on version 1 kv's if you try to access a version 2 kv to need to add data to the url like so:
@@ -99,3 +103,11 @@ curl -H 'X-Vault-Token: TOKEN' -X GET http://vault.local.at:8200/v1/bst/kv2/data
 
 ---
 
+
+## Create Secret by API
+
+I created the payload.json for this
+
+This is the command to put the secret:
+
+curl -H 'Authorization:Bearer TOKEN' -X POST http://vault.local.at:8200/v1/bst/kv2/data/secret --data @payload.json | jq
