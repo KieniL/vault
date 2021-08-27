@@ -1,34 +1,19 @@
 # command repo for vault <!-- omit in toc -->
-- [Installation](#installation)
-- [Further documentation](#further-documentation)
-- [Notes](#notes)
-- [enable a a secret type](#enable-a-a-secret-type)
-- [disable a a secret type](#disable-a-a-secret-type)
-- [input a secret](#input-a-secret)
-- [vault kv put kv/secret username=demo pw=pw](#vault-kv-put-kvsecret-usernamedemo-pwpw)
-- [delete a secret](#delete-a-secret)
-- [list all secrets in an directory](#list-all-secrets-in-an-directory)
-- [get a secret](#get-a-secret)
-  - [format the get to display it in json](#format-the-get-to-display-it-in-json)
-- [Get Secret by API](#get-secret-by-api)
-- [Create Secret by API](#create-secret-by-api)
-- [Delete Secret by API](#delete-secret-by-api)
-- [enable pki](#enable-pki)
-- [tune a secret](#tune-a-secret)
-- [write rootcertificate](#write-rootcertificate)
-    - [Then another secret path is enabled:](#then-another-secret-path-is-enabled)
-    - [Then a csr is created:](#then-a-csr-is-created)
-    - [Then you can sign the csr to create the cert:](#then-you-can-sign-the-csr-to-create-the-cert)
-    - [sign the certificate back to vault](#sign-the-certificate-back-to-vault)
-    - [create a role to generate certificates](#create-a-role-to-generate-certificates)
-    - [generate the certificates](#generate-the-certificates)
-    - [create a role for cert authentication](#create-a-role-for-cert-authentication)
-    - [generate the policy](#generate-the-policy)
-    - [write the certificates](#write-the-certificates)
-    - [enable authentication with cert](#enable-authentication-with-cert)
-    - [write the certificate to auth](#write-the-certificate-to-auth)
-    - [login (not tested since I don't use tls due to local machine)](#login-not-tested-since-i-dont-use-tls-due-to-local-machine)
-    - [test secrets (not tested since I don't use tls due to local machine)](#test-secrets-not-tested-since-i-dont-use-tls-due-to-local-machine)
+- [K8s Integration](#k8s-integration)
+  - [Installation (with helm)](#installation-with-helm)
+    - [Install release](#install-release)
+    - [describe the serviceaccount to see the mountable secret](#describe-the-serviceaccount-to-see-the-mountable-secret)
+    - [Now export the vault-secret name to a variable:](#now-export-the-vault-secret-name-to-a-variable)
+    - [describe the secret](#describe-the-secret)
+    - [enable kubernetes as auth method](#enable-kubernetes-as-auth-method)
+    - [get the token from the secret](#get-the-token-from-the-secret)
+    - [get the Kubernetes CA Certificate:](#get-the-kubernetes-ca-certificate)
+    - [get the Kubernetes Host URL](#get-the-kubernetes-host-url)
+    - [configure the k8s auth method to use the service account token, the location of the host and its certificate:](#configure-the-k8s-auth-method-to-use-the-service-account-token-the-location-of-the-host-and-its-certificate)
+    - [enable the secret store for k8s](#enable-the-secret-store-for-k8s)
+    - [write a policy for read access to a secret](#write-a-policy-for-read-access-to-a-secret)
+    - [create a kubernetes authentication role with access to the policy:](#create-a-kubernetes-authentication-role-with-access-to-the-policy)
+    - [create a pod with injected annotations](#create-a-pod-with-injected-annotations)
 
 
 ## Installation
@@ -211,11 +196,107 @@ vault auth enable cert
 #### write the certificate to auth
 vault write auth/cert/certs/vault-cert display_name=vault_ca.pem policies=vault-cert certificate=@vault_ca.pem
 
-#### login (not tested since I don't use tls due to local machine)
+#### login (does not work without a public dns)
 vault login -method=cert -client-cert=vault_ca.pem -client-key=vault_privkey.pem name=vault-cert
 
-
-#### test secrets (not tested since I don't use tls due to local machine)
+#### test secrets (does not work without a public dns)
 vault kv get -format=json bstv2/data/secret/ | jq
 vault kv get -format=json bstv1/secret/ | jq
 vault kv get -format=json outside_cert/secret/ | jq
+
+
+
+# K8s Integration
+
+The agent sidecar injector will be used: https://www.vaultproject.io/docs/platform/k8s/injector
+
+## Installation (with helm)
+
+I had to add a microk8s addon (host-access) to access vault on my host:
+microk8s enable host-access
+
+This will add the ip 10.0.1.1 as accessible from the cluster
+
+### Install release
+
+helm repo add hashicorp https://helm.releases.hashicorp.com<br/>
+helm repo update<br/>
+helm install vault hashicorp/vault \
+--set "injector.externalVaultAddr=http://10.0.1.1:8200" -n vault --create-namespace
+
+### describe the serviceaccount to see the mountable secret
+
+kubectl describe sa vault -n vault
+
+### Now export the vault-secret name to a variable:
+
+VAULT_HELM_SECRET_NAME=$(kubectl get secrets -n vault --output=json | jq -r '.items[].metadata | select(.name|startswith("vault-token-")).name')
+
+
+### describe the secret
+kubectl describe secret $VAULT_HELM_SECRET_NAME -n vault
+
+
+### enable kubernetes as auth method
+vault auth enable kubernetes
+
+### get the token from the secret
+TOKEN_REVIEW_JWT=$(kubectl get secret $VAULT_HELM_SECRET_NAME -n vault --output='go-template={{ .data.token }}' | base64 --decode)
+
+### get the Kubernetes CA Certificate:
+KUBE_CA_CERT=$(kubectl config view --raw --minify --flatten --output='jsonpath={.clusters[].cluster.certificate-authority-data}' | base64 --decode)
+
+
+### get the Kubernetes Host URL
+KUBE_HOST=$(kubectl config view --raw --minify --flatten --output='jsonpath={.clusters[].cluster.server}')
+
+### configure the k8s auth method to use the service account token, the location of the host and its certificate:
+vault write auth/kubernetes/config \
+        token_reviewer_jwt="$TOKEN_REVIEW_JWT" \
+        kubernetes_host="$KUBE_HOST" \
+        kubernetes_ca_cert="$KUBE_CA_CERT"
+
+### enable the secret store for k8s
+vault secrets enable -path=k8s_secrets kv
+
+I did this for my own since I wanted to store the secrets on an own path
+
+### write a policy for read access to a secret
+vault policy write devwebapp - <<EOF
+path "k8s_secrets/devwebapp/config" {
+  capabilities = ["read"]
+}
+EOF
+
+### create a kubernetes authentication role with access to the policy:
+vault write auth/kubernetes/role/devweb-app \
+        bound_service_account_names=default \
+        bound_service_account_namespaces=default \
+        policies=devwebapp \
+        token_max_ttl=60s \
+      ttl=30s
+
+### create a pod with injected annotations
+see the pod.yaml
+
+It has these environment variables:
+- name: VAULT_ADDR
+  value: 'http://external-vault:8200'
+- name: VAULT_TOKEN
+  value: root
+
+and also these annotations
+vault.hashicorp.com/agent-inject: 'true'
+vault.hashicorp.com/role: 'devweb-app'
+vault.hashicorp.com/agent-inject-secret-credentials.txt: 'k8s_secrets/devwebapp/config'
+
+
+so that means that we created a role in vault which stands for a serviceaccount and a namespace in k8s.
+The token will be renewed every 30 seconds (ttl) and the secret will also renewed after some time.
+
+For a new usage what will be needed:
+* a secret in vault
+* a policy to access the secret
+* a serviceaccount in k8s
+* a role in vault which binds the vault policy and the k8s serviceaccount and a k8s namespace
+* the annotations in the deployment/pod
