@@ -1,6 +1,7 @@
 # command repo for vault <!-- omit in toc -->
 - [Installation](#installation)
 - [Further documentation](#further-documentation)
+- [Notes](#notes)
 - [enable a a secret type](#enable-a-a-secret-type)
 - [disable a a secret type](#disable-a-a-secret-type)
 - [input a secret](#input-a-secret)
@@ -37,8 +38,13 @@ The installation was done with: https://github.com/KieniL/software_installer
 The steps were taken from https://github.com/b1tsized/vault-tutorial and the corresponding youtube playlist
 
 
+## Notes
+Since I installed it with a self signed certificate I had to skip-tls-verify on unseal
+vault operator unseal -tls-skip-verify
 
+Also this flag is needed for every command e.g.
 
+vault kv list -tls-skip-verify bstv1
 ## enable a a secret type
 vault secrets enable kv
 
