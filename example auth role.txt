@@ -1,0 +1,7 @@
+vault write auth/kubernetes/role/mysql-app \
+        bound_service_account_names=familyapp-mysql-sa,unittest-mysql-sa,integrationtest-mysql-sa \
+        bound_service_account_namespaces=family,unittest,integrationtest \
+        policies=mysql \
+        token_max_ttl=60s \
+        token_no_default_policy=true \
+      ttl=30s
