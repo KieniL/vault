@@ -274,6 +274,7 @@ vault write auth/kubernetes/role/devweb-app \
         bound_service_account_namespaces=default \
         policies=devwebapp \
         token_max_ttl=60s \
+        token_no_default_policy=true \
       ttl=30s
 
 ### create a pod with injected annotations
