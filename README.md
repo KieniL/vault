@@ -14,6 +14,8 @@
     - [write a policy for read access to a secret](#write-a-policy-for-read-access-to-a-secret)
     - [create a kubernetes authentication role with access to the policy:](#create-a-kubernetes-authentication-role-with-access-to-the-policy)
     - [create a pod with injected annotations](#create-a-pod-with-injected-annotations)
+    - [initialize transit engine](#initialize-transit-engine)
+    - [create encryption key](#create-encryption-key)
 
 
 ## Installation
@@ -301,3 +303,13 @@ For a new usage what will be needed:
 * a serviceaccount in k8s
 * a role in vault which binds the vault policy and the k8s serviceaccount and a k8s namespace
 * the annotations in the deployment/pod
+
+
+### initialize transit engine
+<code>vault secrets enable transit</code>
+
+Is used for encryption as a service
+
+### create encryption key
+<code>vault write -f transit/keys/family_frontend</code>
+
