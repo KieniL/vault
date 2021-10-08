@@ -16,6 +16,9 @@
     - [create a pod with injected annotations](#create-a-pod-with-injected-annotations)
     - [initialize transit engine](#initialize-transit-engine)
     - [create encryption key](#create-encryption-key)
+    - [rotate encryption key](#rotate-encryption-key)
+    - [encrypt message](#encrypt-message)
+    - [decrypt message](#decrypt-message)
 
 
 ## Installation
@@ -313,3 +316,12 @@ Is used for encryption as a service
 ### create encryption key
 <code>vault write -f transit/keys/family_frontend</code>
 
+### rotate encryption key
+<code>vault write -f transit/keys/family_frontend/rotate</code>
+
+### encrypt message
+vault write transit/encrypt/family_frontend plaintext=$(base64 <<< "4111 1111 1111 1111")
+
+
+### decrypt message
+VAULT_TOKEN=<client_token> vault write transit/decrypt/family_frontend \    ciphertext="vault:v1:cZNHVx+sxdMErXRSuDa1q/pz49fXTn1PScKfhf+PIZPvy8xKfkytpwKcbC0fF2U="
