@@ -4,6 +4,9 @@
     - [Install release (installs vault and agent injector)](#install-release-installs-vault-and-agent-injector)
       - [Install relase with external vault](#install-relase-with-external-vault)
       - [Install release with vault master in kubernetes](#install-release-with-vault-master-in-kubernetes)
+        - [Add the policies](#add-the-policies)
+        - [Add the secrets with UI](#add-the-secrets-with-ui)
+        - [add the kubernetes auth roles](#add-the-kubernetes-auth-roles)
         - [add ha and all necessary configs (not tested)](#add-ha-and-all-necessary-configs-not-tested)
     - [describe the serviceaccount to see the mountable secret](#describe-the-serviceaccount-to-see-the-mountable-secret)
     - [Now export the vault-secret name to a variable:](#now-export-the-vault-secret-name-to-a-variable)
@@ -256,6 +259,79 @@ kubectl exec -it vault-0 -n vault vault operator unseal
 </code>
 
 Since I added ingress I can acess it on vault.kieni.at after I added 127.0.0.1 vault.kieni.at to /etc/hosts
+
+Now I am able to write all the necessary things to read secrets with agent injector
+
+<code>
+kubectl exec  -n vault --stdin=true --tty=true vault-0 -- vault secrets enable -path=k8s_secrets kv
+
+##### Add the policies
+cat vault-files/ansparen-policy.hcl | kubectl exec --stdin=true --tty=true -it vault-0 -n vault vault policy write ansparen -
+cat vault-files/authentication-policy.hcl | kubectl exec --stdin=true --tty=true -it vault-0 -n vault vault policy write authentication -
+cat vault-files/certification-policy.hcl | kubectl exec --stdin=true --tty=true -it vault-0 -n vault vault policy write certification -
+cat vault-files/installer-policy.hcl | kubectl exec --stdin=true --tty=true -it vault-0 -n vault vault policy write installer -
+cat vault-files/mysql-policy.hcl | kubectl exec --stdin=true --tty=true -it vault-0 -n vault vault policy write mysql -
+
+##### Add the secrets with UI
+
+
+##### add the kubernetes auth roles
+kubectl exec  -n vault --stdin=true --tty=true vault-0 -- vault auth enable kubernetes
+
+kubectl exec -it vault-0 -n vault -- /bin/sh
+vault write auth/kubernetes/config \
+    kubernetes_host="https://$KUBERNETES_PORT_443_TCP_ADDR:443" \
+    token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+    kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+    issuer="https://kubernetes.default.svc.cluster.local"
+
+
+
+kubectl exec  -n vault --stdin=true --tty=true vault-0 -- vault write auth/kubernetes/role/ansparen-app \
+  bound_service_account_names=familyapp-ansparservice-sa,unittest-ansparservice-sa,integrationtest-ansparservice-sa \
+  bound_service_account_namespaces=family,unittest,integrationtest  \
+  policies=ansparen \
+  token_max_ttl=60s \
+  token_no_default_policy=true \
+  ttl=30s
+
+kubectl exec  -n vault --stdin=true --tty=true vault-0 -- vault write auth/kubernetes/role/auth-app \
+  bound_service_account_names=familyapp-authservice-sa,unittest-authservice-sa,integrationtest-authservice-sa  \
+  bound_service_account_namespaces=family,unittest,integrationtest  \
+  policies=authentication \
+  token_max_ttl=60s \
+  token_no_default_policy=true \
+  ttl=30s
+
+kubectl exec  -n vault --stdin=true --tty=true vault-0 -- vault write auth/kubernetes/role/cert-app \
+  bound_service_account_names=familyapp-certservice-sa,unittest-certservice-sa,integrationtest-certservice-sa  \
+  bound_service_account_namespaces=family,unittest,integrationtest  \
+  policies=certification \
+  token_max_ttl=60s \
+  token_no_default_policy=true \
+  ttl=30s
+
+kubectl exec  -n vault --stdin=true --tty=true vault-0 -- vault write auth/kubernetes/role/installer-app \
+  bound_service_account_names=familyapp-installer-sa,unittest-installer-sa,integrationtest-installer-sa  \
+  bound_service_account_namespaces=family,unittest,integrationtest  \
+  policies=installer \
+  token_max_ttl=60s \
+  token_no_default_policy=true \
+  ttl=30s
+
+kubectl exec  -n vault --stdin=true --tty=true vault-0 -- vault write auth/kubernetes/role/mysql-app \
+  bound_service_account_names=familyapp-mysql-sa,unittest-mysql-sa,integrationtest-mysql-sa \
+  bound_service_account_namespaces=family,unittest,integrationtest  \
+  policies=mysql \
+  token_max_ttl=60s \
+  token_no_default_policy=true \
+  ttl=30s
+
+
+
+</code>
+
+
 ##### add ha and all necessary configs (not tested)
 see override-values.yaml
 
