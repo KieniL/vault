@@ -1,7 +1,10 @@
 # command repo for vault <!-- omit in toc -->
 - [K8s Integration](#k8s-integration)
-  - [Installation (with helm)](#installation-with-helm)
-    - [Install release](#install-release)
+  - [Installation of agent injector (with helm)](#installation-of-agent-injector-with-helm)
+    - [Install release (installs vault and agent injector)](#install-release-installs-vault-and-agent-injector)
+      - [Install relase with external vault](#install-relase-with-external-vault)
+      - [Install release with vault master in kubernetes](#install-release-with-vault-master-in-kubernetes)
+        - [add ha and all necessary configs (not tested)](#add-ha-and-all-necessary-configs-not-tested)
     - [describe the serviceaccount to see the mountable secret](#describe-the-serviceaccount-to-see-the-mountable-secret)
     - [Now export the vault-secret name to a variable:](#now-export-the-vault-secret-name-to-a-variable)
     - [describe the secret](#describe-the-secret)
@@ -215,20 +218,53 @@ vault kv get -format=json outside_cert/secret/ | jq
 
 The agent sidecar injector will be used: https://www.vaultproject.io/docs/platform/k8s/injector
 
-## Installation (with helm)
+## Installation of agent injector (with helm)
 
 I had to add a microk8s addon (host-access) to access vault on my host:
 microk8s enable host-access
 
 This will add the ip 10.0.1.1 as accessible from the cluster
 
-### Install release
+### Install release (installs vault and agent injector)
 
 helm repo add hashicorp https://helm.releases.hashicorp.com<br/>
 helm repo update<br/>
-helm install vault hashicorp/vault \
---set "injector.externalVaultAddr=http://10.0.1.1:8200" -n vault --create-namespace
 
+#### Install relase with external vault
+helm install vault hashicorp/vault --set "injector.externalVaultAddr=http://10.0.1.1:8200" -n vault --create-namespace
+
+#### Install release with vault master in kubernetes
+helm install vault hashicorp/vault -n vault --create-namespace
+
+It needs a data volume for each replica of sts with ReadWriteOnce and Storage 10Gi. If you enable audit storage it will also need 10Gi ReadWriteOnce.
+
+So I had to install it with (also added ingress):
+<code>
+helm install vault hashicorp/vault \
+    --namespace vault \
+    -f ingress-override-values.yaml \
+    --dry-run
+</code>
+Now run 
+<code>
+kubectl exec -it vault-0 -n vault vault operator init
+</code>
+
+Afterwards you need to unseal vault three times:
+<code>
+kubectl exec -it vault-0 -n vault vault operator unseal
+</code>
+
+Since I added ingress I can acess it on vault.kieni.at after I added 127.0.0.1 vault.kieni.at to /etc/hosts
+##### add ha and all necessary configs (not tested)
+see override-values.yaml
+
+helm install vault hashicorp/vault \
+    --namespace vault \
+    -f override-values.yml \
+    --dry-run
+    
+    
 ### describe the serviceaccount to see the mountable secret
 
 kubectl describe sa vault -n vault

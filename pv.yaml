@@ -1,0 +1,22 @@
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: vault-1-volume
+  namespace: vault
+  labels:
+    app: vault
+    app.kubernetes.io/name: vault-0-volume
+    app.kubernetes.io/instance: vault-0-volume
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/component: vault-0-volume
+    app.kubernetes.io/part-of: vault
+    app.kubernetes.io/managed-by: manual
+spec:
+  capacity:
+    storage: 10Gi
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/k8s/vault
