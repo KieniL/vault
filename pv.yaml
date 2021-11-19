@@ -1,7 +1,7 @@
 kind: PersistentVolume
 apiVersion: v1
 metadata:
-  name: vault-1-volume
+  name: vault-0-volume
   namespace: vault
   labels:
     app: vault
