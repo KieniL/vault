@@ -28,7 +28,7 @@
 
 
 ## Installation
-The installation was done with: https://github.com/KieniL/software_installer
+The installation was done with: https://github.com/KieniL/ansible_setups/tree/main/secretsmanager
 
 ## Further documentation
 The steps were taken from https://github.com/b1tsized/vault-tutorial and the corresponding youtube playlist
